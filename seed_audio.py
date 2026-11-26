@@ -16,7 +16,7 @@ ENDPOINT = "https://openspeech.bytedance.com/api/v3/tts/create"
 MODEL = "seed-audio-1.0"
 PROMPT_LIMIT = 3000
 RESPONSE_LIMIT = 16 * 1024 * 1024
-KEY_NAMES = ("DOUBAO_SPEECH_API_KEY", "ARK_API_KEY")
+KEY_NAMES = ("DOUBAO_SPEECH_API_KEY", "DOUBAO_AUDIO_API_KEY", "ARK_API_KEY")
 
 
 def configured_key() -> str:
@@ -45,7 +45,7 @@ def configured_key() -> str:
             if not re.fullmatch(r"[!-~]+", key):
                 raise IntegrationError("音频服务的 API Key 格式无效。")
             return key
-    raise IntegrationError("请在 .env 中配置 DOUBAO_SPEECH_API_KEY 或 ARK_API_KEY。")
+    raise IntegrationError("请在 .env 中配置豆包语音控制台的 DOUBAO_SPEECH_API_KEY。")
 
 
 def synthesize(prompt: str) -> bytes:
@@ -66,12 +66,21 @@ def synthesize(prompt: str) -> bytes:
         with error:
             status = error.code
             log_id = error.headers.get("X-Tt-Logid", "")
-        if status in (401, 403):
-            message = f"豆包语音鉴权失败（HTTP {status}），请在 .env 配置豆包语音控制台的 DOUBAO_SPEECH_API_KEY，并确认已开通音频生成。"
+            try:
+                details = json.loads(error.read(8192).decode("utf-8"))
+            except (ValueError, OSError, HTTPException):
+                details = {}
+        service_code = details.get("code") if isinstance(details, dict) else None
+        if status == 401:
+            message = "豆包语音 API Key 验证失败（HTTP 401），请在 .env 配置豆包语音控制台的 DOUBAO_SPEECH_API_KEY。"
+        elif status == 403:
+            message = "豆包语音权限不足（HTTP 403），请在这把 Key 所属项目的「开通管理」确认已开通豆包音频生成模型 1.0，并检查 Key 的访问权限。"
         elif status == 429:
             message = "豆包语音请求过于频繁（HTTP 429），请稍后重试。"
         else:
             message = f"豆包语音请求失败（HTTP {status}）。"
+        if type(service_code) is int:
+            message += f" 服务错误码 {service_code}。"
         if re.fullmatch(r"[A-Za-z0-9-]{1,100}", log_id):
             message += f" 日志 ID：{log_id}"
         raise IntegrationError(message) from None
