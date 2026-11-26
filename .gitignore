@@ -21,6 +21,7 @@ output/
 outputs/
 *.log
 *.mp3
+!/demos/chunxiao.mp3
 *.wav
 *.ogg
 *.pcm
