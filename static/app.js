@@ -38,10 +38,10 @@ async function api(path, data, { audio = false } = {}) {
   } catch {
     throw new Error('本地应用未响应。请确认启动窗口仍在运行。');
   }
-  if (audio && response.ok && response.headers.get('Content-Type') === 'audio/mpeg') return response.blob();
+  if (audio && response.ok && response.headers.get('Content-Type') === 'audio/wav') return response.blob();
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || '请求失败（' + response.status + '）。');
-  if (audio) throw new Error('服务未返回 MP3 音频。');
+  if (audio) throw new Error('服务未返回 WAV 音频。');
   return result;
 }
 

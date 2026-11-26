@@ -158,7 +158,7 @@ class StoryHandler(BaseHTTPRequestHandler):
             self.reply({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         else:
             if isinstance(result, bytes):
-                self.respond(HTTPStatus.OK, result, "audio/mpeg")
+                self.respond(HTTPStatus.OK, result, "audio/wav")
             else:
                 self.reply(result)
 

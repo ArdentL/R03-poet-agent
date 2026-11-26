@@ -23,6 +23,7 @@ outputs/
 *.mp3
 !/demos/chunxiao.mp3
 *.wav
+!/demos/chunxiao.wav
 *.ogg
 *.pcm
 Thumbs.db

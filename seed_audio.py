@@ -2,13 +2,16 @@
 
 import base64
 from http.client import HTTPException
+import io
 import json
 import os
 from pathlib import Path
 import re
+import struct
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 from uuid import uuid4
+import wave
 
 from integrations import IntegrationError, NoApiRedirect
 
@@ -17,6 +20,30 @@ MODEL = "seed-audio-1.0"
 PROMPT_LIMIT = 3000
 RESPONSE_LIMIT = 16 * 1024 * 1024
 KEY_NAMES = ("DOUBAO_SPEECH_API_KEY", "DOUBAO_AUDIO_API_KEY", "ARK_API_KEY")
+
+
+def robot_wav(audio: bytes) -> bytes:
+    with wave.open(io.BytesIO(audio), "rb") as source:
+        channels = source.getnchannels()
+        frame_count = source.getnframes()
+        if (source.getsampwidth() != 2 or source.getframerate() != 24000
+                or channels not in (1, 2) or frame_count == 0):
+            raise ValueError("Unsupported robot WAV format")
+        frames = source.readframes(frame_count)
+        if len(frames) != frame_count * channels * 2:
+            raise ValueError("Incomplete WAV frames")
+    if channels == 1:
+        return audio
+    mono = bytearray(frame_count * 2)
+    for index, (left, right) in enumerate(struct.iter_unpack("<hh", frames)):
+        struct.pack_into("<h", mono, index * 2, (left + right) // 2)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(24000)
+        output.writeframes(mono)
+    return buffer.getvalue()
 
 
 def configured_key() -> str:
@@ -52,7 +79,10 @@ def synthesize(prompt: str) -> bytes:
     if not prompt.strip() or len(prompt) > PROMPT_LIMIT:
         raise ValueError(f"音频提示词须为 1 到 {PROMPT_LIMIT} 个字符。")
     key = configured_key()
-    payload = {"model": MODEL, "text_prompt": prompt, "audio_config": {"format": "mp3"}}
+    payload = {
+        "model": MODEL, "text_prompt": prompt,
+        "audio_config": {"format": "wav", "sample_rate": 24000},
+    }
     request = Request(
         ENDPOINT, method="POST",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -96,10 +126,9 @@ def synthesize(prompt: str) -> bytes:
         if type(code) is int and code != 0:
             raise IntegrationError(f"豆包语音生成失败，服务错误码 {code}。")
         audio = base64.b64decode(result.get("audio") or result.get("data") or "", validate=True)
-        if not (audio.startswith(b"ID3") or (len(audio) >= 4 and audio[0] == 255 and audio[1] & 224 == 224)):
-            raise ValueError()
+        audio = robot_wav(audio)
     except IntegrationError:
         raise
-    except (ValueError, TypeError) as error:
-        raise IntegrationError("豆包语音未返回有效的 MP3 音频。") from error
+    except (ValueError, TypeError, wave.Error, EOFError) as error:
+        raise IntegrationError("豆包语音未返回有效的 WAV 音频，需为 24 kHz、16 位 PCM。") from error
     return audio

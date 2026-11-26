@@ -227,7 +227,7 @@
       audioUrl = URL.createObjectURL(result);
       audioPlayer.src = audioUrl;
       audioDownload.href = audioUrl;
-      audioDownload.download = `${name}-朗诵.mp3`;
+      audioDownload.download = `${name}-朗诵.wav`;
       audioPlayer.hidden = audioDownload.hidden = false;
       feedback(audioStatus, '朗诵音频已生成。');
     } catch (error) {
