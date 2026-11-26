@@ -1,0 +1,28 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+settings.bin
+*.pem
+*.key
+
+# Python and editor caches
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.vscode/
+.idea/
+
+# Local output
+.scratch/
+output/
+outputs/
+*.log
+*.mp3
+*.wav
+*.ogg
+*.pcm
+Thumbs.db
+.DS_Store
