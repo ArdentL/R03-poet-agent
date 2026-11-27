@@ -112,8 +112,12 @@ class PoetryHandler(BaseHTTPRequestHandler):
                     if len(parts) == 4:
                         if parts[3] != "audio" or job is None or not job.audio_ready:
                             raise FileNotFoundError()
-                        audio = self.performances.directory / job.id / "audio.mp3"
-                        self.respond(HTTPStatus.OK, audio.read_bytes(), "audio/mpeg")
+                        audio = self.performances.directory / job.id / f"audio.{job.audio_format}"
+                        self.respond(
+                            HTTPStatus.OK,
+                            audio.read_bytes(),
+                            "audio/wav" if job.audio_format == "wav" else "audio/mpeg",
+                        )
                         return
                 else:
                     raise FileNotFoundError()
@@ -194,7 +198,7 @@ class PoetryHandler(BaseHTTPRequestHandler):
             self.reply({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
             if isinstance(result, bytes):
-                self.respond(HTTPStatus.OK, result, "audio/mpeg")
+                self.respond(HTTPStatus.OK, result, "audio/wav")
             else:
                 self.reply(result)
 

@@ -229,7 +229,7 @@
       audioUrl = URL.createObjectURL(result);
       audioPlayer.src = audioUrl;
       audioDownload.href = audioUrl;
-      audioDownload.download = `${name}-朗诵.mp3`;
+      audioDownload.download = `${name}-朗诵.wav`;
       audioPlayer.hidden = audioDownload.hidden = false;
       feedback(audioStatus, '朗诵音频已生成。');
     } catch (error) {
@@ -282,7 +282,7 @@
       generatedPrompt = job.poem.tts_prompt;
       audioUrl = url;
       audioPlayer.src = audioDownload.href = url;
-      audioDownload.download = '机器人朗诵.mp3';
+      audioDownload.download = `机器人朗诵.${job.audio_format || 'mp3'}`;
       audioPlayer.hidden = audioDownload.hidden = false;
     }
     update();

@@ -88,6 +88,7 @@ class Performance(Model):
     poem: Poem | None = None
     sequence: list[SequenceEntry] = Field(default_factory=list)
     audio_ready: bool = False
+    audio_format: Literal["mp3", "wav"] = "mp3"
     controls_possible: bool = False
     actions: dict[str, ActionProgress] = Field(default_factory=dict)
 
@@ -344,9 +345,14 @@ class PerformanceManager:
             self._update(state="synthesizing", sequence=plan.sequence, message="正在合成朗诵音频…")
             audio = synthesize(poem.tts_prompt)
             checkpoint()
-            (directory / "audio.mp3").write_bytes(audio)
-            self._update(state="preparing", audio_ready=True, message="正在检测实际停顿并准备表演…")
-            task = AutomaticTask(version=2, audio="audio.mp3", sequence=plan.sequence)
+            (directory / "audio.wav").write_bytes(audio)
+            self._update(
+                state="preparing",
+                audio_ready=True,
+                audio_format="wav",
+                message="正在检测实际停顿并准备表演…",
+            )
+            task = AutomaticTask(version=2, audio="audio.wav", sequence=plan.sequence)
             save_model(directory / "task.json", task)
             with tempfile.TemporaryDirectory(prefix="prepare-", dir=directory) as scratch:
                 prepared = prepare(

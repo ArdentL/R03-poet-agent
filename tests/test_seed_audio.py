@@ -4,9 +4,11 @@ import base64
 import io
 import json
 import os
+import struct
 import sys
 import tempfile
 import unittest
+import wave
 from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import seed_audio
 from integrations import IntegrationError
+
+
+def wav_fixture(frames: bytes, *, channels: int = 1, width: int = 2, rate: int = 24000) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as output:
+        output.setnchannels(channels)
+        output.setsampwidth(width)
+        output.setframerate(rate)
+        output.writeframes(frames)
+    return buffer.getvalue()
 
 
 class SpeechTests(unittest.TestCase):
@@ -112,14 +124,14 @@ class SpeechTests(unittest.TestCase):
 
     def test_generation_uses_speech_protocol_and_decodes_audio(self) -> None:
         self.configure("DOUBAO_SPEECH_API_KEY=test-key\n")
-        audio = b"ID3test-audio"
+        audio = wav_fixture(struct.pack("<hhh", -1200, 0, 1200))
         response = io.BytesIO(
             json.dumps(
                 {
                     "audio": base64.b64encode(audio).decode("ascii"),
                     "duration": 1.0,
                     "original_duration": 1.0,
-                    "url": "https://example.invalid/sample.mp3",
+                    "url": "https://example.invalid/sample.wav",
                 }
             ).encode("utf-8")
         )
@@ -135,9 +147,52 @@ class SpeechTests(unittest.TestCase):
             {
                 "model": "seed-audio-1.0",
                 "text_prompt": "春眠不觉晓。",
-                "audio_config": {"format": "mp3"},
+                "audio_config": {"format": "wav", "sample_rate": 24000},
             },
         )
+
+    def synthesize_response(self, audio: bytes) -> bytes:
+        self.configure("DOUBAO_SPEECH_API_KEY=test-key\n")
+        response = io.BytesIO(
+            json.dumps(
+                {
+                    "audio": base64.b64encode(audio).decode("ascii"),
+                }
+            ).encode("utf-8")
+        )
+        with patch.object(seed_audio, "build_opener") as opener:
+            opener.return_value.open.return_value = response
+            return seed_audio.synthesize("春眠不觉晓。")
+
+    def test_stereo_wav_is_mixed_to_mono_for_robot(self) -> None:
+        audio = wav_fixture(
+            struct.pack("<hhhhhh", 1000, 3000, -3000, -1000, 32767, -32768), channels=2
+        )
+        result = self.synthesize_response(audio)
+        with wave.open(io.BytesIO(result), "rb") as output:
+            self.assertEqual(output.getparams()[:4], (1, 2, 24000, 3))
+            self.assertEqual(output.readframes(3), struct.pack("<hhh", 2000, -2000, -1))
+
+    def test_mp3_response_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationError, "WAV"):
+            self.synthesize_response(b"ID3test-audio")
+
+    def test_8_bit_wav_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationError, "WAV"):
+            self.synthesize_response(wav_fixture(b"\x80\x81", width=1))
+
+    def test_unexpected_sample_rate_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationError, "WAV"):
+            self.synthesize_response(wav_fixture(b"\x00\x00", rate=44100))
+
+    def test_truncated_wav_is_rejected(self) -> None:
+        audio = wav_fixture(struct.pack("<hhh", -1200, 0, 1200))
+        with self.assertRaisesRegex(IntegrationError, "WAV"):
+            self.synthesize_response(audio[:-2])
+
+    def test_empty_wav_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationError, "WAV"):
+            self.synthesize_response(wav_fixture(b""))
 
 
 if __name__ == "__main__":
