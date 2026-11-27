@@ -1,0 +1,5 @@
+[
+  {"op": "test", "path": "/head_instances/xishiG3_S02_ID06/template", "value": "robot_poet_mouth_only_v1"},
+  {"op": "replace", "path": "/head_instances/xishiG3_S02_ID06/template", "value": "bionic_standard_v1"},
+  {"op": "remove", "path": "/templates/robot_poet_mouth_only_v1"}
+]

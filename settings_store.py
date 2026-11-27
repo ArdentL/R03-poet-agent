@@ -1,13 +1,14 @@
-"""Store user settings in a Windows DPAPI-protected file."""
+"""Windows DPAPI settings; private user-only JSON on Linux and macOS."""
 
 import ctypes
-from ctypes import wintypes
 import json
+import os
+from ctypes import wintypes
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Lock
 
-from integrations import DEFAULT_CONFIG, update_config
+from integrations import ModelSettings, update_config
 
 
 class SettingsError(ValueError):
@@ -26,8 +27,12 @@ def dpapi(content: bytes, *, encrypt: bool) -> bytes:
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     operation = crypt.CryptProtectData if encrypt else crypt.CryptUnprotectData
     operation.argtypes = [
-        ctypes.POINTER(DataBlob), wintypes.LPCWSTR if encrypt else ctypes.c_void_p,
-        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
+        ctypes.POINTER(DataBlob),
+        wintypes.LPCWSTR if encrypt else ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        wintypes.DWORD,
         ctypes.POINTER(DataBlob),
     ]
     operation.restype = wintypes.BOOL
@@ -43,28 +48,41 @@ def dpapi(content: bytes, *, encrypt: bool) -> bytes:
 
 class SettingsStore:
     def __init__(self, directory: Path) -> None:
-        self.path = directory / "settings.bin"
+        self.path = directory / ("settings.bin" if os.name == "nt" else "settings.json")
         self.lock = Lock()
-        self.config = DEFAULT_CONFIG.copy()
+        self.config = ModelSettings()
         if self.path.exists():
             try:
-                stored = json.loads(dpapi(self.path.read_bytes(), encrypt=False).decode("utf-8"))
-                self.config.update({key: stored[key] for key in DEFAULT_CONFIG if key in stored})
+                content = self.path.read_bytes()
+                if os.name == "nt":
+                    content = dpapi(content, encrypt=False)
+                stored = json.loads(content.decode("utf-8"))
+                if "api_key" in stored:  # Migrate the previous single-provider settings.
+                    self.config = update_config(
+                        self.config,
+                        {
+                            key: stored[key]
+                            for key in ("base_url", "model", "api_key")
+                            if key in stored
+                        },
+                    )
+                else:
+                    self.config = ModelSettings.model_validate(stored)
             except (OSError, TypeError, ValueError) as exc:
                 raise SettingsError(f"无法读取本机设置。请检查设置文件权限：{self.path}") from exc
 
-    def get(self) -> dict:
+    def get(self) -> ModelSettings:
         with self.lock:
-            return self.config.copy()
+            return self.config.model_copy(deep=True)
 
-    def save(self, data: dict) -> dict:
+    def save(self, data: dict) -> ModelSettings:
         with self.lock:
             new_config = update_config(self.config, data)
-            encoded = json.dumps(new_config, ensure_ascii=False).encode("utf-8")
+            encoded = new_config.model_dump_json().encode("utf-8")
             temporary_path = None
             try:
-                encrypted = dpapi(encoded, encrypt=True)
-                self.path.parent.mkdir(parents=True, exist_ok=True)
+                encrypted = dpapi(encoded, encrypt=True) if os.name == "nt" else encoded
+                self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 with NamedTemporaryFile(dir=self.path.parent, delete=False) as temporary:
                     temporary_path = Path(temporary.name)
                     temporary.write(encrypted)
@@ -75,4 +93,4 @@ class SettingsStore:
                 if temporary_path is not None:
                     temporary_path.unlink(missing_ok=True)
             self.config = new_config
-            return new_config.copy()
+            return new_config.model_copy(deep=True)

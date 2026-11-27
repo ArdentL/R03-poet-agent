@@ -20,10 +20,13 @@ __pycache__/
 output/
 outputs/
 *.log
-*.mp3
-!/demos/chunxiao.mp3
-*.wav
 *.ogg
 *.pcm
 Thumbs.db
 .DS_Store
+
+*.pyc
+.robot-poet/
+config/robot.json
+build/
+*.egg-info/

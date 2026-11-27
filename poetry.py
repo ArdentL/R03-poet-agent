@@ -1,12 +1,34 @@
 """Poetry text and validated, editable narration prompts."""
 
-from dataclasses import dataclass
 import json
 import math
 import re
 import unicodedata
+from typing import Literal
 
-from story import CODE_FENCE, StoryCheck, _result_text, _spec_text
+from pydantic import BaseModel, ConfigDict
+
+CODE_FENCE = re.compile(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```", re.IGNORECASE | re.DOTALL)
+
+
+class PoetryCheck(BaseModel):
+    label: str
+    status: Literal["pass", "warn", "check"]
+    detail: str
+
+
+def _spec_text(data: dict, key: str, label: str, limit: int) -> str:
+    value = data.get(key, "")
+    if not isinstance(value, str) or "\0" in value:
+        raise ValueError(f"{label}应为文字。")
+    if len(value) > limit:
+        raise ValueError(f"{label}请控制在 {limit} 字以内。")
+    return value.strip()
+
+
+def _result_text(data: dict, key: str) -> str:
+    value = data.get(key)
+    return value.strip() if isinstance(value, str) and "\0" not in value else ""
 
 
 DEFAULT_VOICE = (
@@ -28,14 +50,18 @@ POETRY_FORMS = {
     "wulv": ("五言律诗", "全诗八句，每句五字，标点不计，注意押韵、平仄，颔联与颈联对仗。"),
     "qilv": ("七言律诗", "全诗八句，每句七字，标点不计，注意押韵、平仄，颔联与颈联对仗。"),
     "guti": ("古体诗", "用古体诗创作，句式与篇幅依题意安排，保持古典诗歌的语言和韵味。"),
-    "ci": ("词", "按指定词牌的词谱安排分片、句式、字数、押韵和平仄。未指定词牌时选择合适词牌并在标题注明。"),
+    "ci": (
+        "词",
+        "按指定词牌的词谱安排分片、句式、字数、押韵和平仄。未指定词牌时选择合适词牌并在标题注明。",
+    ),
     "modern": ("现代诗", "用现代汉语自由诗创作，自然分行分节，注重意象、节奏与情感推进。"),
 }
 FIXED_FORMS = {"wujue": (4, 5), "qijue": (4, 7), "wulv": (8, 5), "qilv": (8, 7)}
 
 
-@dataclass(frozen=True, slots=True)
-class PoetrySpec:
+class PoetrySpec(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
     kind: str
     topic: str
     source_text: str
@@ -70,7 +96,9 @@ def read_poetry_spec(data: dict) -> PoetrySpec:
     )
 
 
-def build_poetry_messages(spec: PoetrySpec, title: str = "", body: str = "") -> list[dict[str, str]]:
+def build_poetry_messages(
+    spec: PoetrySpec, title: str = "", body: str = ""
+) -> list[dict[str, str]]:
     if not (spec.topic or spec.source_text or body.strip()):
         raise ValueError("请填写诗词题目、创作主题或粘贴原文。")
     instruction = (
@@ -136,7 +164,10 @@ def validate_segments(segments: object, body: str) -> list[dict]:
             raise ValueError("每个朗诵分段应包含单行诗句。")
         if not direction or len(direction) > 800:
             raise ValueError("每个朗诵分段需要 800 字以内的语气说明。")
-        if not all(type(value) is int or (type(value) is float and math.isfinite(value)) for value in (start, end)):
+        if not all(
+            type(value) is int or (type(value) is float and math.isfinite(value))
+            for value in (start, end)
+        ):
             raise ValueError("朗诵时间必须是有限数值。")
         start, end = round(start, 1), round(end, 1)
         if not 0 <= previous_end <= start < end <= 3600:
@@ -153,29 +184,51 @@ def render_prompt(spec: PoetrySpec, opening: str, ending: str, segments: list[di
     for segment in segments:
         quoted = json.dumps(segment["text"], ensure_ascii=False)
         paragraphs.append(
-            f'{segment["direction"]}\n[{segment["start"]:.1f}s:{segment["end"]:.1f}s]{quoted}'
+            f"{segment['direction']}\n[{segment['start']:.1f}s:{segment['end']:.1f}s]{quoted}"
         )
     paragraphs.append(ending)
     return "\n\n".join(paragraphs)
 
 
-def check_poetry(spec: PoetrySpec, title: str, body: str, prompt: str) -> list[StoryCheck]:
+def check_poetry(spec: PoetrySpec, title: str, body: str, prompt: str) -> list[PoetryCheck]:
     prompt = prompt.replace("\r\n", "\n")
-    checks: list[StoryCheck] = []
-    valid_title = bool(title.strip()) and len(title) <= 200 and not any(char in title for char in "\r\n\0")
-    checks.append({"label": "诗词正文", "status": "pass" if body.strip() and valid_title else "warn",
-                   "detail": "已填写标题与正文。" if body.strip() and valid_title else "请填写单行标题与诗词正文。"})
+    checks: list[dict] = []
+    valid_title = (
+        bool(title.strip()) and len(title) <= 200 and not any(char in title for char in "\r\n\0")
+    )
+    checks.append(
+        {
+            "label": "诗词正文",
+            "status": "pass" if body.strip() and valid_title else "warn",
+            "detail": "已填写标题与正文。"
+            if body.strip() and valid_title
+            else "请填写单行标题与诗词正文。",
+        }
+    )
     if spec.kind == "existing" and spec.source_text:
         same = compact(body) == compact(spec.source_text)
-        checks.append({"label": "原文保留", "status": "pass" if same else "warn",
-                       "detail": "文字与标点和输入原文一致。" if same else "正文与输入原文有差异，请核对。"})
+        checks.append(
+            {
+                "label": "原文保留",
+                "status": "pass" if same else "warn",
+                "detail": "文字与标点和输入原文一致。"
+                if same
+                else "正文与输入原文有差异，请核对。",
+            }
+        )
     status: str = "pass"
     detail = ""
     segments = []
     try:
         for match in TIMED_LINE.finditer(prompt):
-            segments.append({"start": float(match[1]), "end": float(match[2]),
-                             "text": json.loads(match[3]), "direction": "编辑后检查"})
+            segments.append(
+                {
+                    "start": float(match[1]),
+                    "end": float(match[2]),
+                    "text": json.loads(match[3]),
+                    "direction": "编辑后检查",
+                }
+            )
         # An extra malformed timestamp line must not disappear from the check.
         if sum(line.lstrip().startswith("[") for line in prompt.splitlines()) != len(segments):
             raise ValueError('时间行请使用 [0.3s:4.8s]"诗句" 格式。')
@@ -187,40 +240,71 @@ def check_poetry(spec: PoetrySpec, title: str, body: str, prompt: str) -> list[S
     if segments and status == "pass" and spec.target_seconds is not None:
         actual = segments[-1]["end"]
         close = abs(actual - spec.target_seconds) <= max(3, spec.target_seconds * 0.1)
-        checks.append({"label": "目标时长", "status": "pass" if close else "warn",
-                       "detail": f"目标 {spec.target_seconds} 秒，预估朗诵结束于 {actual:.1f} 秒。"})
-    checks.append({"label": "来源", "status": "check",
-                   "detail": "原创作品。" if spec.kind == "original" else (
-                       "使用你提供的原文。" if spec.source_text else "仅按题目生成，请核对原文、作者与朝代。")})
+        checks.append(
+            {
+                "label": "目标时长",
+                "status": "pass" if close else "warn",
+                "detail": f"目标 {spec.target_seconds} 秒，预估朗诵结束于 {actual:.1f} 秒。",
+            }
+        )
+    checks.append(
+        {
+            "label": "来源",
+            "status": "check",
+            "detail": "原创作品。"
+            if spec.kind == "original"
+            else (
+                "使用你提供的原文。"
+                if spec.source_text
+                else "仅按题目生成，请核对原文、作者与朝代。"
+            ),
+        }
+    )
     if body.strip():
         checks.extend(check_poetry_form(spec, body))
-    return checks
+    return [PoetryCheck.model_validate(item) for item in checks]
 
 
-def check_poetry_form(spec: PoetrySpec, body: str) -> list[StoryCheck]:
+def check_poetry_form(spec: PoetrySpec, body: str) -> list[dict]:
     if spec.form in FIXED_FORMS:
         expected_lines, expected_chars = FIXED_FORMS[spec.form]
         # Commas end verse lines even when a couplet is displayed on one row.
         clauses = re.split(r"[，。！？；,.!?;\n]+", body)
-        counts = [sum(unicodedata.category(char)[0] in "LN" for char in clause) for clause in clauses]
+        counts = [
+            sum(unicodedata.category(char)[0] in "LN" for char in clause) for clause in clauses
+        ]
         counts = [count for count in counts if count]
         valid = len(counts) == expected_lines and all(count == expected_chars for count in counts)
         label = POETRY_FORMS[spec.form][0]
         return [
-            {"label": "体裁句数与字数", "status": "pass" if valid else "warn",
-             "detail": f"{label}要求 {expected_lines} 句、每句 {expected_chars} 字；当前 {len(counts)} 句，各句字数为 "
-                       + "、".join(map(str, counts)) + "。"},
+            {
+                "label": "体裁句数与字数",
+                "status": "pass" if valid else "warn",
+                "detail": f"{label}要求 {expected_lines} 句、每句 {expected_chars} 字；当前 {len(counts)} 句，各句字数为 "
+                + "、".join(map(str, counts))
+                + "。",
+            },
             {"label": "声律", "status": "check", "detail": "请审阅押韵、平仄与对仗。"},
         ]
     if spec.form == "ci":
-        return [{"label": "词牌", "status": "check",
-                 "detail": f"请按《{spec.cipai}》词谱核对分片、句式、字数及声律。" if spec.cipai
-                           else "请核对所用词牌及对应词谱，审阅分片、句式、字数与声律。"}]
+        return [
+            {
+                "label": "词牌",
+                "status": "check",
+                "detail": f"请按《{spec.cipai}》词谱核对分片、句式、字数及声律。"
+                if spec.cipai
+                else "请核对所用词牌及对应词谱，审阅分片、句式、字数与声律。",
+            }
+        ]
     return []
 
 
 def normalize_poetry(
-    spec: PoetrySpec, raw: str, body: str = "", title: str = "", metadata: dict[str, str] | None = None,
+    spec: PoetrySpec,
+    raw: str,
+    body: str = "",
+    title: str = "",
+    metadata: dict[str, str] | None = None,
 ) -> dict:
     content = raw.strip().lstrip("\ufeff").strip()
     fence = CODE_FENCE.fullmatch(content)
@@ -245,7 +329,11 @@ def normalize_poetry(
     if body and metadata:
         author, era = metadata.get("author", author), metadata.get("era", era)
     note = _result_text(data, "source_note")
-    if max(len(author), len(era)) > 200 or len(note) > 1200 or any(char in author + era for char in "\r\n"):
+    if (
+        max(len(author), len(era)) > 200
+        or len(note) > 1200
+        or any(char in author + era for char in "\r\n")
+    ):
         raise ValueError("作者、朝代或来源说明格式不正确。")
     if spec.kind == "original":
         author, era, note = "原创", "", "原创诗词。"
@@ -256,6 +344,14 @@ def normalize_poetry(
     prompt = render_prompt(spec, opening, ending, segments)
     if len(prompt) > 32000:
         raise ValueError("朗诵提示词过长，请缩短篇幅或语气说明。")
-    return {"title": title, "author": author, "era": era, "source_note": note,
-            "body": poem, "tts_prompt": prompt, "duration_seconds": segments[-1]["end"],
-            "checks": check_poetry(spec, title, poem, prompt)}
+    return {
+        "title": title,
+        "author": author,
+        "era": era,
+        "source_note": note,
+        "body": poem,
+        "tts_prompt": prompt,
+        "duration_seconds": segments[-1]["end"],
+        "segments": segments,
+        "checks": [check.model_dump() for check in check_poetry(spec, title, poem, prompt)],
+    }

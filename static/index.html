@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>故事智能体</title>
+  <title>诗词智能体</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
   <script src="/static/poetry.js" defer></script>
@@ -12,9 +12,9 @@
 <body>
   <header class="masthead">
     <div class="frame masthead-inner">
-      <a class="brand" href="#workspace"><span class="brand-mark" aria-hidden="true">叙</span>故事智能体</a>
+      <a class="brand" href="#workspace"><span class="brand-mark" aria-hidden="true">诗</span>诗词智能体</a>
       <button class="button settings-link" id="settings-button" type="button">
-        <span class="connection-dot" id="connection-dot" aria-hidden="true"></span><span id="connection-text">DeepSeek 设置</span>
+        <span class="connection-dot" id="connection-dot" aria-hidden="true"></span><span id="connection-text">模型设置</span>
       </button>
     </div>
   </header>
@@ -22,7 +22,7 @@
   <main class="frame" id="workspace">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <h1 id="hero-title">故事创作台</h1>
+        <h1 id="hero-title">诗词朗诵台</h1>
       </div>
       <div class="hero-art" aria-hidden="true">
         <div class="art-line art-line-one"></div><div class="art-line art-line-two"></div><div class="art-line art-line-three"></div>
@@ -31,101 +31,7 @@
       </div>
     </section>
 
-    <fieldset class="workspace-switch" aria-label="创作模式">
-      <label><input type="radio" name="workspace" value="story" checked><span>故事创作</span></label>
-      <label><input type="radio" name="workspace" value="poetry"><span>诗词朗诵</span></label>
-    </fieldset>
-
-    <div class="workbench" id="story-workspace">
-      <div class="workbench-left">
-        <form id="story-brief" class="brief" aria-labelledby="brief-title">
-          <h2 id="brief-title">创作任务</h2>
-          <div class="brief-field">
-            <label class="field-label" for="premise">题目或故事线索</label>
-            <textarea id="premise" rows="3" maxlength="2500" placeholder="例如：一座小城收到一封迟到二十年的信" required></textarea>
-          </div>
-          <div class="brief-field brief-options">
-            <div>
-              <label class="field-label" for="genre">类型或风格 <span>可选</span></label>
-              <input id="genre" maxlength="120" list="genres" placeholder="自由填写或选择" autocomplete="off">
-              <datalist id="genres">
-                <option value="现实主义"></option>
-                <option value="悬疑"></option>
-                <option value="科幻"></option>
-                <option value="童话"></option>
-                <option value="寓言"></option>
-                <option value="奇幻"></option>
-                <option value="历史"></option>
-              </datalist>
-            </div>
-            <div>
-              <label class="field-label" for="max-chars">字数上限 <span>可选</span></label>
-              <input id="max-chars" type="number" min="1" max="6000" step="1" placeholder="例如 1000">
-            </div>
-          </div>
-          <div class="brief-field">
-            <label class="field-label" for="requirements">创作要求 <span>可选</span></label>
-            <textarea id="requirements" rows="3" maxlength="2000" placeholder="例如：第一人称，适合初中生阅读，保留开放式结尾"></textarea>
-          </div>
-          <div class="action-row generation-actions">
-            <button class="button" id="generate-ideas" type="submit" disabled>生成构思</button>
-            <button class="button primary" id="generate-story" type="submit" disabled>生成故事</button>
-          </div>
-          <p class="feedback" id="generation-feedback" role="status" aria-live="polite"></p>
-        </form>
-
-        <section class="idea-section" aria-labelledby="ideas-title">
-          <div class="section-heading">
-            <h2 id="ideas-title">构思</h2>
-            <span class="subtle" id="idea-hint" hidden></span>
-          </div>
-          <div id="ideas" class="idea-list"></div>
-          <p id="ideas-empty" class="empty-note">生成构思后，可以点选一个方向写成故事。</p>
-        </section>
-      </div>
-
-      <div class="workbench-right">
-        <section class="draft" aria-labelledby="draft-title">
-          <div class="draft-head section-heading">
-            <h2 id="draft-title">故事草稿</h2>
-            <span class="draft-state" id="draft-state" hidden></span>
-          </div>
-          <details class="outline" id="outline-panel" open hidden>
-            <summary>故事大纲</summary>
-            <ol id="outline"></ol>
-          </details>
-          <div class="paper">
-            <label class="sr-only" for="story-title">故事标题</label>
-            <input id="story-title" maxlength="200" placeholder="故事标题" autocomplete="off" spellcheck="false">
-            <label class="sr-only" for="story-body">故事正文</label>
-            <textarea id="story-body" rows="7" maxlength="12000" placeholder="故事正文可直接编辑" spellcheck="false"></textarea>
-          </div>
-          <div class="draft-actions action-row">
-            <button class="button" type="button" id="copy-story" disabled>复制</button>
-            <button class="button" type="button" id="download-story" disabled>下载 TXT</button>
-            <button class="button mail-button" type="button" id="send-story" disabled>发送邮件</button>
-          </div>
-        </section>
-
-        <section class="review" id="review-panel" aria-labelledby="review-title" hidden>
-          <div class="section-heading">
-            <h2 id="review-title">要求检查</h2>
-            <button class="text-button" type="button" id="check-story">重新检查</button>
-          </div>
-          <ul id="checks" class="check-list"></ul>
-        </section>
-        <section class="revision-panel" id="revision-panel" aria-labelledby="revision-title" hidden>
-          <h2 id="revision-title">修改意见</h2>
-          <label class="sr-only" for="revision">修改意见</label>
-          <textarea id="revision" rows="2" maxlength="2000" placeholder="例如：缩短开头，让主人公的选择更明确"></textarea>
-          <div class="action-row generation-actions">
-            <button class="button primary" id="revise-story" type="button" disabled>按反馈改稿</button>
-          </div>
-          <p class="feedback" id="revision-feedback" role="status" aria-live="polite"></p>
-        </section>
-      </div>
-    </div>
-    <div class="workbench" id="poetry-workspace" hidden>
+    <div class="workbench" id="poetry-workspace">
       <div class="workbench-left">
         <form id="poetry-brief" class="brief" aria-labelledby="poetry-brief-title">
           <h2 id="poetry-brief-title">朗诵任务</h2>
@@ -183,10 +89,20 @@
             <textarea id="poetry-requirements" rows="2" maxlength="2000" placeholder="例如：前半段明朗舒展，结尾郑重恳切"></textarea>
           </div>
           <div class="action-row generation-actions">
+            <button class="button primary" type="button" id="perform-poetry" disabled>机器人吟诗</button>
             <button class="button primary" type="submit" id="generate-poetry">生成正文与提示词</button>
           </div>
           <p class="feedback" id="poetry-feedback" role="status" aria-live="polite"></p>
         </form>
+        <section class="review" id="performance-panel" aria-labelledby="performance-title" hidden>
+          <div class="section-heading">
+            <h2 id="performance-title">机器人表演</h2>
+            <button class="button" type="button" id="cancel-performance" disabled>停止</button>
+          </div>
+          <p class="feedback" id="performance-feedback" role="status" aria-live="polite"></p>
+          <p class="feedback" id="performance-actions" role="status" aria-live="polite"></p>
+          <ol id="performance-sequence" class="performance-sequence"></ol>
+        </section>
       </div>
       <div class="workbench-right">
         <section class="draft" aria-labelledby="poetry-draft-title">
@@ -244,39 +160,15 @@
         <button class="button close-button" type="button" data-close="settings-dialog" aria-label="关闭连接设置">×</button>
       </div>
       <fieldset>
-        <legend>DeepSeek API</legend>
+        <legend>文本生成模型</legend>
+        <label>服务<select name="provider"><option value="deepseek">DeepSeek</option><option value="doubao">豆包 · 火山方舟</option></select></label>
         <label>API 地址<input name="base_url" type="url" required maxlength="600" autocomplete="off"></label>
-        <label>模型<input name="model" required maxlength="128" list="model-suggestions" autocomplete="off"></label>
-        <datalist id="model-suggestions"><option value="deepseek-flash"></option><option value="deepseek-v4-pro"></option></datalist>
-        <label>API Key<input name="api_key" type="password" maxlength="500" autocomplete="off"></label>
-      </fieldset>
-      <fieldset>
-        <legend>邮件发送</legend>
-        <div class="settings-grid">
-          <label class="wide-field">SMTP 服务器<input name="smtp_host" placeholder="例如 smtp.qq.com" maxlength="253" autocomplete="off"></label>
-          <label>端口<input name="smtp_port" type="number" min="1" max="65535"></label>
-          <label>加密方式<select name="smtp_security"><option value="ssl">SSL / TLS</option><option value="starttls">STARTTLS</option></select></label>
-          <label>SMTP 账号<input name="smtp_user" maxlength="320" placeholder="通常是发信邮箱" autocomplete="off"></label>
-          <label>SMTP 授权码<input name="smtp_password" type="password" maxlength="500" autocomplete="off"></label>
-          <label>发件邮箱<input name="smtp_from" type="email" maxlength="254" placeholder="留空时使用 SMTP 账号" autocomplete="off"></label>
-          <label>默认收件邮箱<input name="recipient" type="email" maxlength="254" autocomplete="off"></label>
-        </div>
+        <label>模型<input name="model" required maxlength="128" autocomplete="off"></label>
+        <label>API Key<input name="api_key" type="password" maxlength="2048" autocomplete="off"></label>
+        <p class="feedback">两种服务的设置分别保存。留空 API Key 保留已保存的密钥。</p>
       </fieldset>
       <p id="settings-feedback" class="feedback" role="status"></p>
       <div class="dialog-footer"><button class="button primary" type="submit" id="save-settings">保存设置</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="send-dialog" aria-labelledby="send-title">
-    <form class="dialog-form" id="send-form">
-      <div class="section-heading dialog-heading">
-        <h2 id="send-title">确认发送</h2>
-        <button class="button close-button" type="button" data-close="send-dialog" aria-label="关闭邮件窗口">×</button>
-      </div>
-      <label>收件邮箱<input name="recipient" type="email" required maxlength="254" autocomplete="email"></label>
-      <div class="mail-preview" aria-label="邮件预览"><p id="mail-title"></p><pre id="mail-body"></pre></div>
-      <p id="send-feedback" class="feedback" role="status"></p>
-      <div class="dialog-footer"><button class="button" type="button" data-close="send-dialog">取消</button><button class="button primary" type="submit" id="confirm-send">确认发送邮件</button></div>
     </form>
   </dialog>
 

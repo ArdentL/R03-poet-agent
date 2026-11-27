@@ -1,11 +1,11 @@
 """Text-to-audio integration for the Doubao Speech HTTP API."""
 
 import base64
-from http.client import HTTPException
 import json
 import os
-from pathlib import Path
 import re
+from http.client import HTTPException
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 from uuid import uuid4
@@ -22,7 +22,7 @@ KEY_NAMES = ("DOUBAO_SPEECH_API_KEY", "DOUBAO_AUDIO_API_KEY", "ARK_API_KEY")
 def configured_key() -> str:
     app_dir = Path(__file__).resolve().parent
     env_paths = [app_dir / ".env", app_dir.parent / "sdk" / ".env"]
-    if env_file := os.getenv("STORY_AUDIO_ENV_FILE"):
+    if env_file := os.getenv("POET_AUDIO_ENV_FILE"):
         env_paths.insert(0, Path(env_file))
     values: dict[str, str] = {}
     for path in env_paths:
@@ -54,10 +54,14 @@ def synthesize(prompt: str) -> bytes:
     key = configured_key()
     payload = {"model": MODEL, "text_prompt": prompt, "audio_config": {"format": "mp3"}}
     request = Request(
-        ENDPOINT, method="POST",
+        ENDPOINT,
+        method="POST",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "X-Api-Key": key,
-                 "X-Api-Request-Id": str(uuid4())},
+        headers={
+            "Content-Type": "application/json",
+            "X-Api-Key": key,
+            "X-Api-Request-Id": str(uuid4()),
+        },
     )
     try:
         with build_opener(NoApiRedirect()).open(request, timeout=300) as response:
@@ -96,7 +100,10 @@ def synthesize(prompt: str) -> bytes:
         if type(code) is int and code != 0:
             raise IntegrationError(f"豆包语音生成失败，服务错误码 {code}。")
         audio = base64.b64decode(result.get("audio") or result.get("data") or "", validate=True)
-        if not (audio.startswith(b"ID3") or (len(audio) >= 4 and audio[0] == 255 and audio[1] & 224 == 224)):
+        if not (
+            audio.startswith(b"ID3")
+            or (len(audio) >= 4 and audio[0] == 255 and audio[1] & 224 == 224)
+        ):
             raise ValueError()
     except IntegrationError:
         raise

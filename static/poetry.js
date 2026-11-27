@@ -21,7 +21,6 @@
   const fields = [topic, source, poetryForm, cipai, seconds, byId('poetry-voice'), byId('poetry-soundscape'),
     byId('poetry-requirements'), title, author, era, body, prompt];
   const storage = 'poetry-workbench-v1';
-  const workspaceRadios = [...document.querySelectorAll('[name="workspace"]')];
   const kindRadios = [...form.querySelectorAll('[name="poetry-kind"]')];
   let loading = false;
   let audioLoading = false;
@@ -30,6 +29,14 @@
   let fingerprint = '';
   let checkVersion = 0;
   let checkTimer;
+  let performanceJob = null;
+  let performanceBusy = false;
+  let performanceLoaded = false;
+  let renderedPerformance = '';
+  let lastPerformanceView = '';
+  let performanceTimer;
+  const performanceStatus = byId('performance-feedback');
+  const terminalStates = ['succeeded', 'failed', 'cancelled', 'unknown'];
 
   function read() {
     return {
@@ -53,7 +60,7 @@
     try {
       localStorage.setItem(storage, JSON.stringify({
         fields: Object.fromEntries(fields.map((field) => [field.id, field.value])),
-        kind: read().kind, workspace: workspaceRadios.find((radio) => radio.checked).value,
+        kind: read().kind,
         note: sourceNote.textContent, fingerprint,
       }));
     } catch {
@@ -62,10 +69,13 @@
   }
 
   function update() {
+    const busy = loading || performanceBusy;
     const hasBody = Boolean(body.value.trim());
     const hasPrompt = Boolean(prompt.value.trim());
-    byId('generate-poetry').disabled = loading;
-    byId('refresh-tts').disabled = loading || !hasBody;
+    byId('generate-poetry').disabled = busy;
+    byId('perform-poetry').disabled = busy || audioLoading || !performanceLoaded;
+    byId('cancel-performance').disabled = !performanceBusy;
+    byId('refresh-tts').disabled = busy || !hasBody;
     byId('copy-poem').disabled = !hasBody;
     byId('download-poem').disabled = !hasBody;
     byId('copy-tts').disabled = !hasPrompt;
@@ -73,7 +83,7 @@
     const text = prompt.value.trim();
     const promptLength = Array.from(text).length;
     const overLimit = promptLength > 3000;
-    audioButton.disabled = audioLoading || loading || !hasPrompt || overLimit;
+    audioButton.disabled = audioLoading || busy || !hasPrompt || overLimit;
     if (audioUrl && text !== generatedPrompt) clearAudio();
     if (!audioLoading && overLimit) {
       feedback(audioStatus, `音频生成最多支持 3000 个字符，当前 ${promptLength} 个。`, true);
@@ -81,25 +91,17 @@
       feedback(audioStatus);
     }
     if (!audioLoading) audioStatus.dataset.overLimit = String(overLimit);
-    byId('check-poetry').disabled = loading;
+    byId('check-poetry').disabled = busy;
     byId('poetry-review').hidden = !hasBody && !hasPrompt;
     byId('poetry-stale').hidden = !hasPrompt || !fingerprint || fingerprint === currentFingerprint();
-    fields.forEach((field) => { field.readOnly = loading; });
-    poetryForm.disabled = loading;
+    fields.forEach((field) => { field.readOnly = busy; });
+    poetryForm.disabled = busy;
     byId('poetry-cipai-field').hidden = poetryForm.value !== 'ci';
-    kindRadios.forEach((radio) => { radio.disabled = loading; });
+    kindRadios.forEach((radio) => { radio.disabled = busy; });
     const original = read().kind === 'original';
     byId('poetry-source-field').hidden = original;
     byId('poetry-topic-label').textContent = original ? '创作主题' : '诗词题目';
     topic.placeholder = original ? '例如：春日校园，珍惜少年时光' : '例如：长歌行';
-  }
-
-  function switchWorkspace() {
-    const poetry = workspaceRadios.find((radio) => radio.checked).value === 'poetry';
-    byId('story-workspace').hidden = poetry;
-    byId('poetry-workspace').hidden = !poetry;
-    byId('hero-title').textContent = poetry ? '诗词朗诵台' : '故事创作台';
-    save();
   }
 
   function render(checks) {
@@ -123,7 +125,7 @@
   }
 
   async function check(version = ++checkVersion) {
-    if (!seconds.validity.valid || loading || !(body.value.trim() || prompt.value.trim())) return;
+    if (!seconds.validity.valid || loading || performanceBusy || !(body.value.trim() || prompt.value.trim())) return;
     try {
       const response = await api('poetry/check', read());
       if (version !== checkVersion) return;
@@ -141,13 +143,13 @@
   }
 
   async function generate(useCurrentBody) {
-    if (loading || !form.reportValidity()) return;
+    if (loading || performanceBusy || !form.reportValidity()) return;
     if (!state.config) {
       feedback(status, '连接设置正在加载，请稍后重试。', true);
       return;
     }
     if (!state.config.api_ready) {
-      openSettings('保存 DeepSeek API Key 后即可生成诗词和朗诵提示词。');
+      openSettings('保存当前模型服务的 API Key 后即可生成诗词和朗诵提示词。');
       return;
     }
     const request = read();
@@ -211,7 +213,7 @@
 
   async function generateAudio() {
     const text = prompt.value.trim();
-    if (audioLoading || loading || !text || Array.from(text).length > 3000) return;
+    if (audioLoading || loading || performanceBusy || !text || Array.from(text).length > 3000) return;
     const name = title.value.trim().replace(/[<>:"/\\|?*]/g, '_').slice(0, 60) || '诗词';
     audioLoading = true;
     update();
@@ -238,6 +240,103 @@
     }
   }
 
+  function showPerformance(job) {
+    performanceLoaded = true;
+    performanceJob = job;
+    performanceBusy = Boolean(job && !terminalStates.includes(job.state));
+    if (!job) { update(); return; }
+    byId('performance-panel').hidden = false;
+    feedback(performanceStatus, job.message, ['failed', 'unknown'].includes(job.state));
+    if (job.poem && renderedPerformance !== job.id && (performanceBusy || !body.value.trim())) {
+      const poem = job.poem;
+      title.value = poem.title;
+      author.value = poem.author;
+      era.value = poem.era;
+      body.value = poem.body;
+      prompt.value = poem.tts_prompt;
+      sourceNote.textContent = poem.source_note;
+      fingerprint = currentFingerprint();
+      render(poem.checks);
+      renderedPerformance = job.id;
+      save();
+    }
+    const actionStates = { requested: '已请求', started: '执行中', ended: '已完成', interrupted: '已中断', failed: '失败' };
+    byId('performance-actions').textContent = Object.values(job.actions || {})
+      .map((action) => `${action.name}：${actionStates[action.state] || action.state}`).join('；');
+    const view = JSON.stringify([job.id, job.sequence]);
+    if (lastPerformanceView !== view) {
+      lastPerformanceView = view;
+      byId('performance-sequence').replaceChildren(...(job.sequence || []).map((entry, index) => {
+      const row = document.createElement('li');
+      const verse = document.createElement('strong');
+      const cue = document.createElement('span');
+      verse.textContent = job.poem.segments[index].text;
+      cue.textContent = entry.expression + (entry.action ? ' · ' + entry.action : '');
+      row.append(verse, cue);
+      return row;
+    }));
+    }
+    const url = `/api/performances/${job.id}/audio`;
+    if (job.audio_ready && renderedPerformance === job.id && audioUrl !== url) {
+      clearAudio();
+      generatedPrompt = job.poem.tts_prompt;
+      audioUrl = url;
+      audioPlayer.src = audioDownload.href = url;
+      audioDownload.download = '机器人朗诵.mp3';
+      audioPlayer.hidden = audioDownload.hidden = false;
+    }
+    update();
+  }
+
+  async function watchPerformance() {
+    clearTimeout(performanceTimer);
+    try {
+      const path = performanceJob ? `performances/${performanceJob.id}` : 'performances';
+      const { performance } = await api(path);
+      showPerformance(performance);
+      if (performanceBusy) performanceTimer = setTimeout(watchPerformance, 1000);
+    } catch (error) {
+      byId('performance-panel').hidden = false;
+      feedback(performanceStatus, error.message + ' 正在重新查询任务状态…', true);
+      performanceTimer = setTimeout(watchPerformance, 3000);
+    }
+  }
+
+  async function performPoetry() {
+    if (loading || audioLoading || performanceBusy || !form.reportValidity()) return;
+    if (!state.config?.api_ready) {
+      openSettings('保存当前模型服务的 API Key 后即可让机器人吟诗。');
+      return;
+    }
+    const request = { ...read(), id: 'job-' + crypto.randomUUID().replaceAll('-', '') };
+    performanceBusy = true;
+    update();
+    byId('performance-panel').hidden = false;
+    feedback(performanceStatus, '正在提交吟诗任务…');
+    try {
+      const { performance } = await api('performances', request);
+      showPerformance(performance);
+      await watchPerformance();
+    } catch (error) {
+      performanceJob = null;
+      performanceLoaded = false;
+      await watchPerformance();
+      feedback(performanceStatus, error.message, true);
+    }
+  }
+
+  async function cancelPerformance() {
+    if (!performanceJob || !performanceBusy) return;
+    byId('cancel-performance').disabled = true;
+    try {
+      const { performance } = await api(`performances/${performanceJob.id}/cancel`, {});
+      showPerformance(performance);
+    } catch (error) {
+      feedback(performanceStatus, error.message, true);
+      update();
+    }
+  }
+
   async function copy(text, label) {
     try {
       await navigator.clipboard.writeText(text);
@@ -260,6 +359,8 @@
   form.addEventListener('submit', (event) => { event.preventDefault(); generate(false); });
   byId('refresh-tts').addEventListener('click', () => generate(true));
   audioButton.addEventListener('click', generateAudio);
+  byId('perform-poetry').addEventListener('click', performPoetry);
+  byId('cancel-performance').addEventListener('click', cancelPerformance);
   byId('check-poetry').addEventListener('click', () => { clearTimeout(checkTimer); check(); });
   byId('copy-poem').addEventListener('click', () => copy(poemText(), '诗词'));
   byId('copy-tts').addEventListener('click', () => copy(prompt.value, '提示词'));
@@ -276,8 +377,7 @@
     save();
     scheduleCheck();
   }));
-  workspaceRadios.forEach((radio) => radio.addEventListener('change', switchWorkspace));
-  window.addEventListener('story-config-updated', update);
+  window.addEventListener('poetry-config-updated', update);
 
   try {
     const saved = JSON.parse(localStorage.getItem(storage)) || {};
@@ -289,9 +389,6 @@
     });
     if (kindRadios.some((radio) => radio.value === saved.kind)) {
       kindRadios.forEach((radio) => { radio.checked = radio.value === saved.kind; });
-    }
-    if (workspaceRadios.some((radio) => radio.value === saved.workspace)) {
-      workspaceRadios.forEach((radio) => { radio.checked = radio.value === saved.workspace; });
     }
     if (typeof saved.note === 'string') sourceNote.textContent = saved.note;
     if (saved.fingerprint) {
@@ -305,6 +402,6 @@
     // Keep the form defaults if saved browser data cannot be read.
   }
   update();
-  switchWorkspace();
   scheduleCheck();
+  watchPerformance();
 })();

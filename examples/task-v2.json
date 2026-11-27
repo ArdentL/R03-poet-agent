@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "audio": "./chunxiao.wav",
+  "sequence": [
+    {
+      "expression": "微笑",
+      "action": "欢迎"
+    },
+    {
+      "expression": "伤心",
+      "action": null
+    },
+    {
+      "expression": "高兴",
+      "action": "手垂下"
+    },
+    {
+      "expression": "震惊",
+      "action": null
+    }
+  ]
+}

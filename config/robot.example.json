@@ -1,0 +1,16 @@
+{
+  "ssh": {
+    "host": "robot-ssh-alias",
+    "user": "robot-user",
+    "port": 22,
+    "connect_timeout": 10
+  },
+  "remote": {
+    "python": "python3",
+    "ros_setup": "/opt/ros/humble/setup.bash",
+    "interfaces_setup": "/opt/nezhahal/install/local_setup.bash",
+    "work_dir": "/tmp/robot-poet-jobs",
+    "domain_id": 100,
+    "container": "nezhahal-nx"
+  }
+}

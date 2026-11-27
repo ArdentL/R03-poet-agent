@@ -1,0 +1,11 @@
+[
+  {"op": "test", "path": "/head_instances/xishiG3_S02_ID06/template", "value": "bionic_standard_v1"},
+  {"op": "copy", "from": "/templates/bionic_standard_v1", "path": "/templates/robot_poet_mouth_only_v1"},
+  {"op": "test", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/adaptor_id", "value": "AudioFaceAdaptor"},
+  {"op": "test", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/bind_motors", "value": ["eyebrow_r_outer", "eyebrow_l_outer", "eyebrow_r_inner", "eyebrow_l_inner", "lip_up_r", "lip_up_c", "lip_up_out_c", "lip_up_l", "lip_down_r", "lip_down_c", "lip_down_out_c", "lip_down_l", "smile_r", "lip_corner_r", "smile_l", "lip_corner_l", "jaw_r", "jaw_l"]},
+  {"op": "remove", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/bind_motors/0"},
+  {"op": "remove", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/bind_motors/0"},
+  {"op": "remove", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/bind_motors/0"},
+  {"op": "remove", "path": "/templates/robot_poet_mouth_only_v1/adaptors/2/bind_motors/0"},
+  {"op": "replace", "path": "/head_instances/xishiG3_S02_ID06/template", "value": "robot_poet_mouth_only_v1"}
+]

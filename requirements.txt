@@ -1,0 +1,3 @@
+pydantic>=2.10,<3
+webrtcvad-wheels==2.0.14
+imageio-ffmpeg==0.8.1

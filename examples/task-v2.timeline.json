@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "audio_sha256": "7574a351174da45b4d59fdd82337045658b48d59ffb248b97401a42b2d0f042e",
+  "playback_frames": 384941,
+  "playback_rate": 24000,
+  "engine": "webrtcvad-energy-v3",
+  "target_count": 4,
+  "regions": [
+    {
+      "start_ms": 150,
+      "end_ms": 3240
+    },
+    {
+      "start_ms": 3720,
+      "end_ms": 6480
+    },
+    {
+      "start_ms": 7110,
+      "end_ms": 10260
+    },
+    {
+      "start_ms": 10740,
+      "end_ms": 15660
+    }
+  ]
+}
